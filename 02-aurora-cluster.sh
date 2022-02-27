@@ -31,6 +31,6 @@ sam package --s3-bucket $BUCKET --output-template-file package.yaml --region $RE
 
 sam deploy --stack-name pyweather-aurora-cluster \
 --s3-bucket $BUCKET --capabilities CAPABILITY_IAM \
---parameter-overrides VpcId=$VPC_ID Subnets=$SUBNETS APIKeySecretArn=arn:aws:secretsmanager:us-east-2:753157545766:secret:open-weather-api-fivOn5 \
+--parameter-overrides VpcId=$VPC_ID Subnets=$SUBNETS APIKeySecretArn=arn:aws:secretsmanager:us-east-2:753157545766:secret:openweather-api-key-TSVMR7 \
 --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM \
 --region $REGION

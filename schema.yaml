@@ -82,3 +82,13 @@ Outputs:
     Value: !Ref LambdaForSchema
     Export:
       Name: "pyweather-aurora-LambdaForSchema"
+      
+  CustomResourceRole:
+    Value: !Ref CustomResourceRole
+    Export:
+      Name: "pyweather-aurora-CustomResourceRole"
+      
+  CustomResourceRoleArn:
+    Value: !GetAtt CustomResourceRole.Arn
+    Export:
+      Name: "pyweather-aurora-CustomResourceRoleArn"

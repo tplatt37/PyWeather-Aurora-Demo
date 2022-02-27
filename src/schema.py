@@ -5,7 +5,29 @@ import json
 import pymysql
 import logging
 import requests
+from botocore.exceptions import ClientError
 
+def get_db_secrets(secret_name):
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager'
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+            print(e)
+            raise e
+    else:
+        # Decrypts secret using the associated KMS CMK.
+        if 'SecretString' in get_secret_value_response:
+            secret = get_secret_value_response['SecretString']
+            return secret
+            
 def handler(event, context):
     
     print("Event...")
@@ -35,8 +57,10 @@ def handler(event, context):
 def createSchema(event):
     
     rds_host = event["ResourceProperties"]["RDSEndpoint"]
-    name= "admin"
-    password = "Password123"
+    
+    db_secrets = eval(get_db_secrets(event["ResourceProperties"]["DBSecret"]))
+    name= db_secrets['username']
+    password = db_secrets['password']
     
     try:
         print("Connecting to " + rds_host + "...")

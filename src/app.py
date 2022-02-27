@@ -5,11 +5,10 @@ import requests
 import json
 import pymysql
 from datetime import datetime
+from botocore.exceptions import ClientError
 
-def get_db_secrets():
+def get_db_secrets(secret_name):
 
-    secret_name = "weather-db"
-    
     # Create a Secrets Manager client
     session = boto3.session.Session()
     client = session.client(
@@ -41,10 +40,11 @@ def lambda_handler(event, context):
     
     print("Retrieving weather for city = " + location)
     
-    rds_host = db_secrets['host'] 
+    db_secrets = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
+    rds_host = os.environ["RDS_ENDPOINT"]
     name= db_secrets['username']
     password = db_secrets['password']
-    db_name = db_secrets['dbname']
+    db_name = "weather"
     
     # Need to check for:
     # 
@@ -62,8 +62,10 @@ def lambda_handler(event, context):
     print(weather['main']['temp'])
     print(weather)  
     
+    
     with conn.cursor() as cur:
        
+        now = datetime.now()
         data =  (location, str(weather['main']['temp']),  now.strftime("%Y-%m-%d %H:%M:%S"))
         cur.execute("insert into WeatherHistory (city, temp, at_time) values( %s, %s, %s)", data)
         conn.commit()
@@ -127,4 +129,4 @@ def get_api_secret():
 # On a COLD START this code will be executed.
 # On a WARM START these variables will already be populated (This code doesn't run)
 API_KEY = get_api_secret()
-DB_SECRETS = eval(get_db_secrets())
+#DB_SECRETS = eval(get_db_secrets())

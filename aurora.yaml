@@ -104,20 +104,37 @@ Resources:
         MaxCapacity: 4
         SecondsUntilAutoPause: 1000
 
-#  CustomResource:
-#    Type: AWS::CloudFormation::CustomResource
-#    DependsOn: RDSCluster
-#    Properties:
-#      RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
-#      RDSPort: !GetAtt RDSCluster.Endpoint.Port
-#      ServiceToken: !Join 
-#        - ''
-#        - - 'arn:aws:lambda:'
-#          - !Ref 'AWS::Region'
-#          - ':'
-#          - !Ref 'AWS::AccountId'
-#          - ':function:'
-#          - !ImportValue 'pyweather-aurora-LambdaForSchema'
+  CustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: RDSCluster
+    Properties:
+      RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
+      RDSPort: !GetAtt RDSCluster.Endpoint.Port
+      DBSecret: !Ref DBSecret
+      ServiceToken: !Join 
+        - ''
+        - - 'arn:aws:lambda:'
+          - !Ref 'AWS::Region'
+          - ':'
+          - !Ref 'AWS::AccountId'
+          - ':function:'
+          - !ImportValue 'pyweather-aurora-LambdaForSchema'
+
+  # Add a Resource Policy on the Secret so that LambdaForSchema can access it.
+  DBSecretResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    Properties:
+      BlockPublicPolicy: True
+      SecretId:
+        Ref: DBSecret
+      ResourcePolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Resource: "*"
+          Action: secretsmanager:GetSecretValue
+          Effect: Allow
+          Principal:
+            AWS: !ImportValue "pyweather-aurora-CustomResourceRoleArn"
 
   PyWeatherAurora:
     Type: AWS::Serverless::Function 
@@ -125,18 +142,53 @@ Resources:
       CodeUri: src/
       Handler: app.lambda_handler
       Runtime: python3.8
-      Policies:
-        - AWSSecretsManagerGetSecretValuePolicy:        # Policy template with placeholder value
-            SecretArn: !Ref APIKeySecretArn
-        - AWSSecretsManagerGetSecretValuePolicy:        # Policy template with placeholder value
-            SecretArn: !Ref DBSecret
+      Timeout: 30
+      Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           DB_SECRET_ARN: !Ref DBSecret
-          
+          RDS_ENDPOINT: !GetAtt RDSCluster.Endpoint.Address
+      VpcConfig:
+        SecurityGroupIds: 
+          - !ImportValue "pyweather-aurora-DBSecurityGroup"
+        SubnetIds: !Split [',', !Ref Subnets]
       Events:
         PyWeatherDemo:
           Type: Api 
           Properties:
             Path: /
             Method: get
+            
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: FunctionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # These things needed for VPC access.
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: 
+                  - !Ref APIKeySecretArn
+                  - !Ref DBSecret
