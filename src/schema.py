@@ -11,18 +11,17 @@ def handler(event, context):
     print("Event...")
     print(event)
     
-    print("Context...")
-    print(context)
-    
     try:
         if event['RequestType'] == 'Create':
-            createSchema()
+            createSchema(event)
             send_response(event, context, "SUCCESS",
                           {"Message": "Resource creation successful."})
         elif event['RequestType'] == 'Update':
+            # nothing to do on update, so just indicate SUCCESS
             send_response(event, context, "SUCCESS",
                           {"Message": "Resource update successful."})
         elif event['RequestType'] == 'Delete':
+            # nothing to do on Delete.
             send_response(event, context, "SUCCESS",
                           {"Message": "Resource deletion successful."})
         else:
@@ -33,16 +32,12 @@ def handler(event, context):
             "Message": "Exception during processing"})
 
     
-def createSchema():
+def createSchema(event):
     
-    rds_host = os.environ["RDS_ENDPOINT"]
+    rds_host = event["ResourceProperties"]["RDSEndpoint"]
     name= "admin"
     password = "Password123"
     
-    # Need to check for:
-    # 
-    # Unexpected error: Could not connect to MySQL instance.
-    #[ERROR]	2021-05-06T10:06:12.451Z	3bf6616c-1a25-4f55-8047-09cb748b4ddf	(1045, "Access denied for user 'admin'@'172.31.70.62' (using password: YES)")
     try:
         print("Connecting to " + rds_host + "...")
         conn = pymysql.connect(host=rds_host, user=name, passwd=password, connect_timeout=60)
@@ -52,20 +47,23 @@ def createSchema():
     
     with conn.cursor() as cur:
        
-        dml = "create database if not exists weather;"
+        dml = "CREATE DATABASE IF NOT EXISTS weather;"
         cur.execute(dml)
    
-        dml = "use weather;"
+        dml = "USE weather;"
         cur.execute(dml)
    
-        dml = "CREATE TABLE IF NOTE EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
+        dml = "CREATE TABLE IF NOT EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
         cur.execute(dml)
        
     conn.commit()
+    
+    print("Schema created.")
 
 def send_response(event, context, response_status, response_data):
     
-    
+    # We send status back to CloudFormation by perfoming a PUT to a S3 pre-signed URL.
+    # This is why the Lambda must be connected to a Private subnet with NATGW it has to be able to talk to S3.
     print("ResponseURL=" + event['ResponseURL'])
     
     # Respond back to CloudFormation
@@ -79,26 +77,13 @@ def send_response(event, context, response_status, response_data):
         "Data": response_data
     })
 
-    print("response_body...")
-    print(response_body)
-    
-    print("headers_dict...")
+    # Content-Type should be null string.
     headers_dict = {"content-type" : "", "content-length" : str(len(response_body)) }
-    print(headers_dict)
-    
-    print("About to PUT... to :" +event['ResponseURL'])
+
     response = requests.put( event['ResponseURL'], data=response_body.encode('utf-8'), headers=headers_dict)
 
     print("Response...")
     print(response)
 
-    # Have to perform a PUT back to S3 pre-signed URL
-    #opener = build_opener(HTTPHandler)
-    #request = Request(event['ResponseURL'], data=response_body)
-    #request.add_header('Content-Type', '')
-    #request.add_header('Content-Length', len(response_body))
-    #request.get_method = lambda: 'PUT'
-    #response = opener.open(request)
- 
- 
+
  

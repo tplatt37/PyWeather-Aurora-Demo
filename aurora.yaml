@@ -1,5 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
+Transform: 
+  - AWS::Serverless-2016-10-31
+  - AWS::SecretsManager-2020-07-23
 Description: >-
     Creates an Aurora Serverless (MySql) database and uses a CFN Custom Resource to initialize it with a schema.
 
@@ -8,7 +10,7 @@ Parameters:
     NoEcho: 'true'
     Description: Username for MySQL database access
     Type: String
-    Default: admin
+    Default: weatheradmin
     MinLength: '1'
     MaxLength: '16'
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
@@ -29,38 +31,64 @@ Parameters:
     Type: String
     
   Subnets:
-    Description: Choose Subnets for the RDSCluster. Must be Public subnets, or have a NAT Gateway for access to S3 (for CustomResource schema setup)
-    Type: List<AWS::EC2::Subnet::Id>
+    Description: Choose Subnets for the RDSCluster. Must be Private subnets with NAT GW, or S3 Gateway for access to S3 (for CustomResource schema setup)
+    Type: String
 
-    
+  APIKeySecretArn:
+    Type: String
+    Default: "arn:aws:secretmanager:REGION:ACCOUNTID:secret:SECRETNAME"
+    Description: "Enter the ARN of the Secrets Manager Secret that holds the OpenWeatherMap API Key (You must create this yourself!)"
+
 Resources:
-
-  DBSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: Security group for Aurora Serverless database 
-      
-  DBSecurityGroupIngress:
-    Type: "AWS::EC2::SecurityGroupIngress"
-    Properties:
-      GroupId: !Ref DBSecurityGroup
-      SourceSecurityGroupId: !Ref DBSecurityGroup
-      FromPort: 3306
-      ToPort: 3306
-      IpProtocol: tcp
 
   DBSubnetGroup: 
     Type: "AWS::RDS::DBSubnetGroup"
     Properties: 
       DBSubnetGroupDescription: Subnet group for Aurora Serverless
-      SubnetIds: !Ref Subnets
+      SubnetIds: !Split [',', !Ref Subnets]
+  
+  DBSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Description: Secret for the database user and password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"weatheradmin"}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludePunctuation: true
+        
+  DBSecretRotation:
+    Type: 'AWS::SecretsManager::RotationSchedule'
+    Properties:
+      HostedRotationLambda:
+        # See here: https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_available-rotation-templates.html#sar-template-mysql-singleuser
+        RotationType: MySQLSingleUser
+        # We have to specify this because the Lambda will need to be connected to the VPC in order to change the password.
+        # https://github.com/aws-samples/aws-secrets-manager-rotation-lambdas/blob/master/SecretsManagerRDSMySQLRotationSingleUser/lambda_function.py
+        VpcSecurityGroupIds: !ImportValue 'pyweather-aurora-DBSecurityGroup'
+        VpcSubnetIds: !Ref Subnets
+      RotationRules:
+        AutomaticallyAfterDays: 30
+        Duration: 2h
+        # For more precise control, consider using a cron expression.
+        #ScheduleExpression: "cron(0 1 * * ? *)"
+      SecretId: !Ref DBSecret
+  
+  SecretTargetAttachment:
+    Type: 'AWS::SecretsManager::SecretTargetAttachment'
+    DependsOn: 
+      - RDSCluster
+      - DBSecret
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref RDSCluster
+      TargetType: "AWS::RDS::DBCluster"
 
   RDSCluster:
     Type: 'AWS::RDS::DBCluster'
     Properties:
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
       Engine: aurora
       EngineVersion: 5.6.10a
       # Serverless
@@ -69,70 +97,46 @@ Resources:
       EnableHttpEndpoint: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
-        - !Ref DBSecurityGroup
+        - !ImportValue 'pyweather-aurora-DBSecurityGroup'
       ScalingConfiguration:
         AutoPause: true
         MinCapacity: 1
-        MaxCapacity: 8
+        MaxCapacity: 4
         SecondsUntilAutoPause: 1000
 
-  LambdaForSchema:
+#  CustomResource:
+#    Type: AWS::CloudFormation::CustomResource
+#    DependsOn: RDSCluster
+#    Properties:
+#      RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
+#      RDSPort: !GetAtt RDSCluster.Endpoint.Port
+#      ServiceToken: !Join 
+#        - ''
+#        - - 'arn:aws:lambda:'
+#          - !Ref 'AWS::Region'
+#          - ':'
+#          - !Ref 'AWS::AccountId'
+#          - ':function:'
+#          - !ImportValue 'pyweather-aurora-LambdaForSchema'
+
+  PyWeatherAurora:
     Type: AWS::Serverless::Function 
-    DependsOn: RDSCluster
     Properties:
-      Handler: schema.handler
-      Role: !GetAtt CustomResourceRole.Arn
-      Runtime: python3.8
-      Timeout: 90
       CodeUri: src/
-      VpcConfig:
-        SecurityGroupIds: 
-          - !Ref DBSecurityGroup
-        SubnetIds: !Ref Subnets
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:        # Policy template with placeholder value
+            SecretArn: !Ref APIKeySecretArn
+        - AWSSecretsManagerGetSecretValuePolicy:        # Policy template with placeholder value
+            SecretArn: !Ref DBSecret
       Environment:
         Variables:
-          RDS_ENDPOINT: !GetAtt RDSCluster.Endpoint.Address
-          RDS_PORT: !GetAtt RDSCluster.Endpoint.Port
-  
-  CustomResource:
-    Type: AWS::CloudFormation::CustomResource
-    DependsOn: LambdaForSchema
-    Properties:
-      RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
-      RDSPort: !GetAtt RDSCluster.Endpoint.Port
-      ServiceToken: !Join 
-        - ''
-        - - 'arn:aws:lambda:'
-          - !Ref 'AWS::Region'
-          - ':'
-          - !Ref 'AWS::AccountId'
-          - ':function:'
-          - !Ref LambdaForSchema
-
-  CustomResourceRole:
-    Type: 'AWS::IAM::Role'
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      Path: /
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
-      Policies:
-        - PolicyName: FunctionPolicy
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              # These things needed for VPC access.
-              - Effect: Allow
-                Action:
-                  - 'ec2:CreateNetworkInterface'
-                  - 'ec2:DescribeNetworkInterfaces'
-                  - 'ec2:DeleteNetworkInterface'
-                Resource: '*'
+          DB_SECRET_ARN: !Ref DBSecret
+          
+      Events:
+        PyWeatherDemo:
+          Type: Api 
+          Properties:
+            Path: /
+            Method: get

@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+    Creates a Lambda for a CFN Custom Resource that will be used to populate an Aurora instance with a Schema.
+
+Parameters:
+  VpcId:
+    Description: VPC ID
+    Type: String
+    
+  Subnets:
+    Description: Choose Subnets for the RDSCluster. Must be Private subnets with NAT GW, or S3 Gateway for access to S3 (for CustomResource schema setup)
+    Type: List<AWS::EC2::Subnet::Id>
+
+    
+Resources:
+
+  DBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Security group for Aurora Serverless database 
+      
+  DBSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId: !Ref DBSecurityGroup
+      SourceSecurityGroupId: !Ref DBSecurityGroup
+      FromPort: 3306
+      ToPort: 3306
+      IpProtocol: tcp
+
+  LambdaForSchema:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Handler: schema.handler
+      Role: !GetAtt CustomResourceRole.Arn
+      Runtime: python3.8
+      Timeout: 90
+      CodeUri: src/
+      VpcConfig:
+        SecurityGroupIds: 
+          - !Ref DBSecurityGroup
+        SubnetIds: !Ref Subnets
+    
+  CustomResourceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: FunctionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # These things needed for VPC access.
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                Resource: '*'
+                
+Outputs:
+
+  DBSecurityGroup:
+    Value: !Ref DBSecurityGroup
+    Export:
+      Name: "pyweather-aurora-DBSecurityGroup"
+      
+  LambdaForSchema:
+    Value: !Ref LambdaForSchema
+    Export:
+      Name: "pyweather-aurora-LambdaForSchema"
