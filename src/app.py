@@ -7,6 +7,8 @@ import pymysql
 from datetime import datetime
 from botocore.exceptions import ClientError
 
+
+
 def get_db_secrets(secret_name):
 
     # Create a Secrets Manager client
@@ -28,6 +30,39 @@ def get_db_secrets(secret_name):
             secret = get_secret_value_response['SecretString']
             return secret
             
+def get_api_secret():
+
+    secret_name = "openweather-api-key"
+    secret = ""
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager'
+    )
+
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        raise e
+    else:
+        # Decrypts secret using the associated KMS CMK.
+        # Depending on whether the secret is a string or binary, one of these fields will be populated.
+        secret = json.loads(get_secret_value_response['SecretString'])
+        
+    return secret['apikey']
+
+
+# Initialize API Key and DB Secrets outside of Handler for efficiency
+# API_KEY is a global variable that will hold the API Key
+# On a COLD START this code will be executed.
+# On a WARM START these variables will already be populated (This code doesn't run)
+API_KEY = get_api_secret()
+DB_SECRETS = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
+
+            
 def lambda_handler(event, context):
     
     print(event)
@@ -40,10 +75,10 @@ def lambda_handler(event, context):
     
     print("Retrieving weather for city = " + location)
     
-    db_secrets = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
+    
     rds_host = os.environ["RDS_ENDPOINT"]
-    name= db_secrets['username']
-    password = db_secrets['password']
+    name= DB_SECRETS['username']
+    password = DB_SECRETS['password']
     db_name = "weather"
     
     # Need to check for:
@@ -53,19 +88,28 @@ def lambda_handler(event, context):
     try:
         conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=20)
     except pymysql.MySQLError as e:
-        logger.error("ERROR: Unexpected error: Could not connect to MySQL instance.")
-        logger.error(e)
-        sys.exit()
+        print("ERROR: Unexpected error: Could not connect to MySQL instance.")
+        print(e)
+        # If We received Access denied for user, we simply grab the secret again - presumably it has been rotated.
+        if "Access denied for user" in str(e):
+            print("Password may have been rotated, retrieving latest password...")
+            secret_info = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
+            password = secret_info['password']
+            conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=20)
+        else:
+            sys.exit()
     
     weather = get_weather(API_KEY, location)
  
     print(weather['main']['temp'])
     print(weather)  
     
+    now = datetime.now()
+    print(now.strftime("%Y-%m-%d %H:%M:%S"))
+   
     
     with conn.cursor() as cur:
-       
-        now = datetime.now()
+  
         data =  (location, str(weather['main']['temp']),  now.strftime("%Y-%m-%d %H:%M:%S"))
         cur.execute("insert into WeatherHistory (city, temp, at_time) values( %s, %s, %s)", data)
         conn.commit()
@@ -100,33 +144,3 @@ def get_weather(api_key, location):
     
     return r.json()
 
-def get_api_secret():
-
-    secret_name = "openweather-api-key"
-    secret = ""
-
-    # Create a Secrets Manager client
-    session = boto3.session.Session()
-    client = session.client(
-        service_name='secretsmanager'
-    )
-
-    try:
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
-    except ClientError as e:
-        raise e
-    else:
-        # Decrypts secret using the associated KMS CMK.
-        # Depending on whether the secret is a string or binary, one of these fields will be populated.
-        secret = json.loads(get_secret_value_response['SecretString'])
-        
-    return secret['apikey']
-
-# Initialize API Key and DB Secrets outside of Handler for efficiency
-# API_KEY is a global variable that will hold the API Key
-# On a COLD START this code will be executed.
-# On a WARM START these variables will already be populated (This code doesn't run)
-API_KEY = get_api_secret()
-#DB_SECRETS = eval(get_db_secrets())
