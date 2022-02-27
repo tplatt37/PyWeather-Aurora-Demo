@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+    Creates an Aurora Serverless (MySql) database and uses a CFN Custom Resource to initialize it with a schema.
+
+Parameters:
+  DBUsername:
+    NoEcho: 'true'
+    Description: Username for MySQL database access
+    Type: String
+    Default: admin
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+    
+  DBPassword:
+    NoEcho: 'true'
+    Description: Password MySQL database access
+    Type: String
+    Default: Password123
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+    
+  VpcId:
+    Description: VPC ID
+    Type: String
+    
+  Subnets:
+    Description: Choose which subnets the Application Load Balancer should be deployed to.  Must be Public subnets!
+    Type: List<AWS::EC2::Subnet::Id>
+
+    
+Resources:
+
+  DBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: Security group for Aurora Serverless database 
+      
+  DBSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId: !Ref DBSecurityGroup
+      SourceSecurityGroupId: !Ref DBSecurityGroup
+      FromPort: 3306
+      ToPort: 3306
+      IpProtocol: tcp
+
+  DBSubnetGroup: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: Subnet group for Aurora Serverless
+      SubnetIds: !Ref Subnets
+
+  RDSCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBClusterIdentifier: my-serverless-cluster
+      Engine: aurora
+      EngineVersion: 5.6.10a
+      # Serverless
+      EngineMode: serverless
+      # So we can use Data API / Query Editor in the console, if we want.
+      EnableHttpEndpoint: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      ScalingConfiguration:
+        AutoPause: true
+        MinCapacity: 1
+        MaxCapacity: 8
+        SecondsUntilAutoPause: 1000
+
+  LambdaForSchema:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Handler: schema.handler
+      Role: !GetAtt CustomResourceRole.Arn
+      Runtime: python3.8
+      Timeout: 90
+      CodeUri: src/
+      VpcConfig:
+        SecurityGroupIds: 
+          - !Ref DBSecurityGroup
+        SubnetIds: !Ref Subnets
+  
+  CustomResourceRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: FunctionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # These things needed for VPC access.
+              - Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                Resource: '*'

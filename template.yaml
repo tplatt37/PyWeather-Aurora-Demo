@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Creates the PyWeatherDemo Lambda - a simple Python3.8 Lambda function that helps showcase the basic features of Lambda.
+
+Parameters:
+  SecretArn:
+    Type: String
+    Default: "arn:aws:secretmanager:REGION:ACCOUNTID:secret:SECRETNAME"
+    Description: "Enter the ARN of the Secrets Manager Secret that holds the OpenWeatherMap API Key (You must create this yourself!)"
+
+Globals:
+  Function:
+    Timeout: 30
+
+Resources:
+  PyWeatherDemo:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:        # Policy template with placeholder value
+            SecretArn: !Ref SecretArn
+      Events:
+        PyWeatherDemo:
+          Type: Api 
+          Properties:
+            Path: /
+            Method: get
+            
+Outputs:
+  # API Gateway endpoint as an output, for convenience
+  PyWeatherDemoRESTApi:
+    Description: "API Gateway endpoint URL for Prod stage - change the city as desired."
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/?city=Scranton"

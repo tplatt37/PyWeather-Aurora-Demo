@@ -1,0 +1,24 @@
+#
+# This Buildspec is used to build and package PyWeather-Demo Lambda function.
+#
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+        python: 3.8
+  build:
+    commands:
+      - echo "Use bucket created via the CF template:"
+      # NOTE: This env var must be set in the CodeBuild Project. It's where the pipeline stores the artifacts.
+      - echo $BUCKET_NAME
+      - echo "Find the Secret ARN.  The Secret MUST be named openweather-api-key"
+      - SECRETARN=$(aws secretsmanager describe-secret --secret-id openweather-api-key | jq -r '.ARN')
+      - echo $SECRETARN 
+      - echo "Write it out as json for input to the CF template as parameter values"
+      - printf '{"Parameters":{"SecretArn":"%s"}}' $SECRETARN > stackparams.json
+      - sam build --template-file template-cicd-gradual.yaml
+      - sam package --s3-bucket $BUCKET_NAME --output-template-file package.yaml
+artifacts:
+  files:
+    - package.yaml
+    - stackparams.json
