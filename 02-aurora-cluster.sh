@@ -13,6 +13,13 @@ if [ -z $2 ]; then
 fi
 SUBNETS=$2
 
+if [ -z $3 ]; then
+        echo "Need the ARN of the Secret holding the OpenWeather API Key. Exiting..."
+        exit 0
+fi
+SECRET_ARN=$3
+
+
 REGION=${AWS_DEFAULT_REGION:-$(aws configure get default.region)}
 echo "Creating in $REGION..."
 
@@ -31,6 +38,6 @@ sam package --s3-bucket $BUCKET --output-template-file package.yaml --region $RE
 
 sam deploy --stack-name pyweather-aurora-cluster \
 --s3-bucket $BUCKET --capabilities CAPABILITY_IAM \
---parameter-overrides VpcId=$VPC_ID Subnets=$SUBNETS APIKeySecretArn=arn:aws:secretsmanager:us-east-2:753157545766:secret:openweather-api-key-TSVMR7 \
+--parameter-overrides VpcId=$VPC_ID Subnets=$SUBNETS APIKeySecretArn=$SECRET_ARN \
 --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM \
 --region $REGION
