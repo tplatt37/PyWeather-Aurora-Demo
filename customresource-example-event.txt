@@ -1,0 +1,12 @@
+{
+   "RequestType":"Create",
+   "ServiceToken":"arn:aws:lambda:us-east-2:123456789012:function:aurora-app-LambdaForSchema-SPDsPcZX9Ero",
+   "ResponseURL":"https://cloudformation-custom-resource-response-useast2.s3.us-east-2.amazonaws.com/arn%3Aaws%3Acloudformation%3Aus-east-2%3A123456789012%3Astack/aurora-app/56cf3600-97c3-11ec-a86b-0a508c7da1b4%7CCustomResource%7C9f316baf-7c16-4cd5-98bd-ad36f1bb8796?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Date=20220227T115441Z&X-Amz-SignedHeaders=host&X-Amz-Expires=7200&X-Amz-Credential=AKIAVRFIPK6PJWVZE4MH%2F20220227%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Signature=3243baa712d3eda94b99547c1e4e0ff90c4bf0f4d1b9dca4b42e4e6803c7fb31",
+   "StackId":"arn:aws:cloudformation:us-east-2:123456789012:stack/aurora-app/56cf3600-97c3-11ec-a86b-0a508c7da1b4",
+   "RequestId":"9f316baf-7c16-4cd5-98bd-ad36f1bb8796",
+   "LogicalResourceId":"CustomResource",
+   "ResourceType":"AWS::CloudFormation::CustomResource",
+   "ResourceProperties":{
+      "ServiceToken":"arn:aws:lambda:us-east-2:123456789012:function:aurora-app-LambdaForSchema-SPDsPcZX9Ero"
+   }
+}

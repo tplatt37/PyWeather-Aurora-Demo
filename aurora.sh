@@ -1,12 +1,25 @@
-# Sometimes we need a comma delimited list of subnets, other times, space delimited. 
-# use $1 for the comma delimited, and SUBNETS for the space delimited.
-# Subnets are needed for the ALB.
-SUBNETS=$(echo $1 | sed 's/,/ /g')
-echo "Subnets=$SUBNETS"
+#!/bin/bash
 
-# Grab the VpcId off the first subnet. This is needed for the Security Group and Target Group.
-VPC_ID=$(aws ec2 describe-subnets --subnet-ids $SUBNETS --query 'Subnets[0].VpcId' --output text)
-echo "VpcId=$VPC_ID"
+#REGION="us-west-2"
+#SUBNETS=subnet-094e4b6294da6fec6,subnet-05d9f721231db14c3
+#VPCID=vpc-0552daf3bdaf74f9d
 
+#REGION="us-east-1"
+#SUBNETS=subnet-0d71b9e02201d9fda,subnet-0e87b252e9cd61d4a
+#VPCID=vpc-0ddaf8d68784c47ad
 
-aws cloudformation deploy --template-file aurora.yaml --stack-name "aurora-serverless" --parameter-overrides VpcId=$VPC_ID Subnets=$1 --capabilities CAPABILITY_IAM
+REGION="us-east-2"
+SUBNETS=subnet-021d91d2ceedf5245,subnet-0953302f9523870f2
+VPCID=vpc-0b01ea3196ae886be
+
+echo "Region:$REGION..."
+
+BUCKET=builds-platt-$REGION
+
+sam build -t aurora.yaml
+sam package --s3-bucket $BUCKET --output-template-file package.yaml --region $REGION
+
+sam deploy --stack-name aurora-app9 \
+--s3-bucket $BUCKET --capabilities CAPABILITY_IAM \
+--parameter-overrides VpcId=$VPCID Subnets=$SUBNETS \
+--region $REGION
