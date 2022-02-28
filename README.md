@@ -75,6 +75,30 @@ The second SAM template creates:
 
 NOTE: The PyWeather code is robust in that if the password is rotated, it will recognize this ("access denied" message) and retrieve the rotated password.
 
+
+## Then what?
+
+Run the Lambda!  
+
+The recommended way (assuming you are doing a demo to a class) is to simply run it via the Lambda console.
+(But there is also an API Gateway endpoint)
+
+Go to the Lambda Console
+
+Create a test Event with this content:
+
+{"queryStringParameters":{"city":"Orlando"}}
+
+Run the function a few times. 
+
+Then , go to Secrets Manager and find the DB Secret. 
+
+Rotate it 
+
+Run the Lambda again - and note that the output will show "access denied" but the code will recognize this an pull the updated password.
+
+You can also go the "Query Editor" in the RDS console and retrieve the data from the table.
+
 ## Uninstall
 
 Simply delete both Cloudformation stacks or run:
