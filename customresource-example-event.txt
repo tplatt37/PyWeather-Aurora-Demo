@@ -1,3 +1,8 @@
+#
+# This is a sample of what the incoming Event to a CFN CustomResource looks like.
+# (Basically it's giving you an S3 pre-signed URL that you need to PUT a simple json file to)
+#
+
 {
    "RequestType":"Create",
    "ServiceToken":"arn:aws:lambda:us-east-2:123456789012:function:aurora-app-LambdaForSchema-SPDsPcZX9Ero",
