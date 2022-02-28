@@ -4,31 +4,9 @@ Transform:
   - AWS::SecretsManager-2020-07-23
 Description: >-
     Creates an Aurora Serverless (MySql) database and uses a CFN Custom Resource to initialize it with a schema.
+    Also uses SecretsManager to store the admin credentials - and rotate them every 30 days
 
 Parameters:
-  DBUsername:
-    NoEcho: 'true'
-    Description: Username for MySQL database access
-    Type: String
-    Default: weatheradmin
-    MinLength: '1'
-    MaxLength: '16'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
-    
-  DBPassword:
-    NoEcho: 'true'
-    Description: Password MySQL database access
-    Type: String
-    Default: Password123
-    MinLength: '8'
-    MaxLength: '41'
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: must contain only alphanumeric characters.
-    
-  VpcId:
-    Description: VPC ID
-    Type: String
     
   Subnets:
     Description: Choose Subnets for the RDSCluster. Must be Private subnets with NAT GW, or S3 Gateway for access to S3 (for CustomResource schema setup)
@@ -51,6 +29,7 @@ Resources:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
       Description: Secret for the database user and password
+      # Auto-generate a 30 character password for a user named "weatheradmin"
       GenerateSecretString:
         SecretStringTemplate: '{"username":"weatheradmin"}'
         GenerateStringKey: "password"
@@ -60,6 +39,7 @@ Resources:
   DBSecretRotation:
     Type: 'AWS::SecretsManager::RotationSchedule'
     Properties:
+      # This basically creates a lambda for us to do the rotation.
       HostedRotationLambda:
         # See here: https://docs.aws.amazon.com/secretsmanager/latest/userguide/reference_available-rotation-templates.html#sar-template-mysql-singleuser
         RotationType: MySQLSingleUser
@@ -76,6 +56,8 @@ Resources:
   
   SecretTargetAttachment:
     Type: 'AWS::SecretsManager::SecretTargetAttachment'
+    # We have to associate together the Secret and the RDS Cluster after they are created.
+    # I found that adding this explicit DependsOn is necessary.
     DependsOn: 
       - RDSCluster
       - DBSecret
@@ -87,18 +69,25 @@ Resources:
   RDSCluster:
     Type: 'AWS::RDS::DBCluster'
     Properties:
+      # NOTE: username and password are coming from the secret created earlier in this stack.
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
       Engine: aurora
+      # This is the ONLY MySQL version supported!
       EngineVersion: 5.6.10a
       # Serverless
       EngineMode: serverless
-      # So we can use Data API / Query Editor in the console, if we want.
+      # So we can use Data API / Query Editor in the console, if we want (Great for demos!)
       EnableHttpEndpoint: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !ImportValue 'pyweather-aurora-DBSecurityGroup'
       ScalingConfiguration:
+        # NOTE, while MinCapacity is set to 1, we have AutoPause enabled.
+        # Effectively, the db will scale to ZERO after 1,000 seconds of inactivity.
+        # When it is in use, it won't go below 1 ACU (or over 4 ACU)
+        # After being paused, it will spin up again with about 20-30 seconds of delay
+        # (So set a generous timeout when you make a db connection)
         AutoPause: true
         MinCapacity: 1
         MaxCapacity: 4
@@ -106,8 +95,10 @@ Resources:
 
   CustomResource:
     Type: AWS::CloudFormation::CustomResource
+    # Trigger a Lambda to create the db schema once the cluster is available.
     DependsOn: RDSCluster
     Properties:
+      # Note that we're passing the RDS details needed by the lambda (endpoint and secret arn)
       RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
       RDSPort: !GetAtt RDSCluster.Endpoint.Port
       DBSecret: !Ref DBSecret
@@ -121,6 +112,8 @@ Resources:
           - !ImportValue 'pyweather-aurora-LambdaForSchema'
 
   # Add a Resource Policy on the Secret so that LambdaForSchema can access it.
+  # This Lambda was created in the first stack, but we didn't have the Secret defined at that time
+  # So easiest thing to do is enable access via the RESOURCE POLICY on the SECRET (as opposed to the lambda execution role)
   DBSecretResourcePolicy:
     Type: AWS::SecretsManager::ResourcePolicy
     Properties:
@@ -136,13 +129,14 @@ Resources:
           Principal:
             AWS: !ImportValue "pyweather-aurora-CustomResourceRoleArn"
 
+  # This is the actual PyWeather function.
   PyWeatherAurora:
     Type: AWS::Serverless::Function 
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
       Runtime: python3.8
-      Timeout: 30
+      Timeout: 90
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:

@@ -63,6 +63,8 @@ DB_SECRETS = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
             
 def lambda_handler(event, context):
     
+    global DB_SECRETS
+    
     print(event)
     
     print("Lambda function ARN:", context.invoked_function_arn)
@@ -94,6 +96,8 @@ def lambda_handler(event, context):
             secret_info = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
             password = secret_info['password']
             conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=20)
+            # Update the global variable 
+            DB_SECRETS = secret_info
         else:
             sys.exit()
     

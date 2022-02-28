@@ -38,6 +38,7 @@ Resources:
       Runtime: python3.8
       Timeout: 90
       CodeUri: src/
+      # Connected to the VPC where the Aurora cluster will be created 
       VpcConfig:
         SecurityGroupIds: 
           - !Ref DBSecurityGroup

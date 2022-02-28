@@ -87,8 +87,11 @@ def createSchema(event):
         dml1 = "CREATE DATABASE IF NOT EXISTS weather;"
         cur.execute(dml1)
    
-        dml2 = "USE weather; CREATE TABLE IF NOT EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
+        dml2 = "USE weather;"
         cur.execute(dml2)
+   
+        dml3 = "CREATE TABLE IF NOT EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
+        cur.execute(dml3)
        
         # This really needs more error checking...
         
