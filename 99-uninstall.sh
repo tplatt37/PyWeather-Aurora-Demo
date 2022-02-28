@@ -24,17 +24,15 @@ fi
 echo "OK... here we go..."
 
 # Gotta delete this one first, and wait for it.
-STACK_NAME=pyweather-auora-cluster  
-echo "Deleting ($STACK_NAME) ..."
+STACK_NAME=pyweather-aurora-cluster
+echo "Deleting ($STACK_NAME)..."
 aws cloudformation delete-stack --stack-name $STACK_NAME
-echo $?
-aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME 
+aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME  
 
 # Also this one...
 STACK_NAME=pyweather-aurora-custom-resource
-echo "Deleting ($STACK_NAME) ..."
-aws cloudformation delete-stack --stack-name $STACK_NAME
-echo $?
+echo "Deleting ($STACK_NAME)..."
+aws cloudformation delete-stack --stack-name $STACK_NAME 
 aws cloudformation wait stack-delete-complete --stack-name $STACK_NAME 
 
 echo "Done."

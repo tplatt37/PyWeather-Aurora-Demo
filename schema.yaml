@@ -36,7 +36,7 @@ Resources:
       Handler: schema.handler
       Role: !GetAtt CustomResourceRole.Arn
       Runtime: python3.8
-      Timeout: 90
+      Timeout: 180
       CodeUri: src/
       # Connected to the VPC where the Aurora cluster will be created 
       VpcConfig:
