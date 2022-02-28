@@ -30,6 +30,10 @@ def get_db_secrets(secret_name):
             
 def handler(event, context):
     
+    # This is the main Lambda handler.
+    # Note that this Lambda is run on Create, Update, and Delete stack actions
+    # It only really does anything on Create, but it still has to signal success back for all 3.
+    
     print("Event...")
     print(event)
     
@@ -48,13 +52,19 @@ def handler(event, context):
                           {"Message": "Resource deletion successful."})
         else:
             send_response(event, context, "FAILED",
-                          {"Message": "Unexpected event ("+ event +") received from CloudFormation"})
+                          {"Message": "Unexpected event RequestType ("+ event +") received from CloudFormation"})
     except: 
         send_response(event, context, "FAILED", {
             "Message": "Exception during processing"})
 
     
 def createSchema(event):
+    
+    # Connect to the database, and create the schema.
+    # DB credentials are retrieved from SecretsManager secret.
+    
+    # The RDSEndpoint and Secret ARN are passed in via the CloudFormation CustomResource.
+    # (See customresource-example-event.txt)
     
     rds_host = event["ResourceProperties"]["RDSEndpoint"]
     
@@ -69,25 +79,29 @@ def createSchema(event):
         print("ERROR: Unexpected error: Could not connect to MySQL instance.")
         sys.exit()
     
+    # Create a very simple database schema.
+    # NOTE that this is resilient and will skip steps if they've already been done (via IF NOT EXISTS)
+    # Idempotency!
     with conn.cursor() as cur:
        
-        dml = "CREATE DATABASE IF NOT EXISTS weather;"
-        cur.execute(dml)
+        dml1 = "CREATE DATABASE IF NOT EXISTS weather;"
+        cur.execute(dml1)
    
-        dml = "USE weather;"
-        cur.execute(dml)
-   
-        dml = "CREATE TABLE IF NOT EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
-        cur.execute(dml)
+        dml2 = "USE weather; CREATE TABLE IF NOT EXISTS WeatherHistory (id INT(8) UNSIGNED AUTO_INCREMENT PRIMARY KEY, city VARCHAR(64) NOT NULL, temp DECIMAL(5,2) NOT NULL,at_time DATETIME);"
+        cur.execute(dml2)
        
+        # This really needs more error checking...
+        
     conn.commit()
     
     print("Schema created.")
 
 def send_response(event, context, response_status, response_data):
     
+    # When the Lambda is done, it needs to communicate status back to CloudFormation.
+    
     # We send status back to CloudFormation by perfoming a PUT to a S3 pre-signed URL.
-    # This is why the Lambda must be connected to a Private subnet with NATGW it has to be able to talk to S3.
+    # This is why the Lambda must be connected to a Private subnet with NATGW - it has to be able to talk to S3.
     print("ResponseURL=" + event['ResponseURL'])
     
     # Respond back to CloudFormation
@@ -104,6 +118,7 @@ def send_response(event, context, response_status, response_data):
     # Content-Type should be null string.
     headers_dict = {"content-type" : "", "content-length" : str(len(response_body)) }
 
+    # If you get timeouts here - double check that your Private Subnet can reach S3.
     response = requests.put( event['ResponseURL'], data=response_body.encode('utf-8'), headers=headers_dict)
 
     print("Response...")

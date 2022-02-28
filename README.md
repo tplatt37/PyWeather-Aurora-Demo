@@ -48,6 +48,7 @@ echo $BUCKETNAME
 
 The Aurora Serverless V1 database cluster must reside in a Private subnet.
 This Lambda must be connected to the VPC where the Aurora database will reside.
+The private subnets must have a NAT GW (or s3 vpc endpoint) so the Lambda code can interact with an s3 pre-signed URL.
 
 You private subnets should be in a simple comma delimited list.
 

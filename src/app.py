@@ -7,8 +7,6 @@ import pymysql
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-
-
 def get_db_secrets(secret_name):
 
     # Create a Secrets Manager client
@@ -81,7 +79,7 @@ def lambda_handler(event, context):
     password = DB_SECRETS['password']
     db_name = "weather"
     
-    # Need to check for:
+    # We need to check for:
     # 
     # Unexpected error: Could not connect to MySQL instance.
     #[ERROR]	2021-05-06T10:06:12.451Z	3bf6616c-1a25-4f55-8047-09cb748b4ddf	(1045, "Access denied for user 'admin'@'172.31.70.62' (using password: YES)")
@@ -107,7 +105,6 @@ def lambda_handler(event, context):
     now = datetime.now()
     print(now.strftime("%Y-%m-%d %H:%M:%S"))
    
-    
     with conn.cursor() as cur:
   
         data =  (location, str(weather['main']['temp']),  now.strftime("%Y-%m-%d %H:%M:%S"))
