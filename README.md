@@ -4,7 +4,7 @@ This is a version of PyWeather that uses a Relational Database (Aurora Serverles
 
 Use this to demonstrate:
 * A Lambda function connect to a VPC (to access the Aurora DB)
-* Use of Aurora Serverless V1 database.  The database will "pause" or scale down to 0 ACUs after 1,000 seconds.  It will spin back up on demand.
+* Use of Aurora Serverless V2 database.  
 * Use of a CloudFormation Custom Resource to execute a Lambda to load the simple schema into the database.
 * Use of SecretsManager both for the secure creation of database administrator credentials, but also for automatic rotation
 
@@ -46,7 +46,7 @@ echo $BUCKETNAME
 
 ## Specify two PRIVATE Subnets
 
-The Aurora Serverless V1 database cluster must reside in a Private subnet.
+The Aurora Serverless V2 database cluster should reside in a Private subnet.
 This Lambda must be connected to the VPC where the Aurora database will reside.
 The private subnets must have a NAT GW (or s3 vpc endpoint) so the Lambda code can interact with an s3 pre-signed URL.
 
@@ -68,7 +68,7 @@ The first SAM template creates the Lambda for the CustomResource used to load a 
 
 The second SAM template creates:
 * An admin user/password (dynamically generated) in SecretsManager
-* The Aurora Serverless V1 RDS Cluster (in the private subnets)
+* The Aurora Serverless V2 RDS Cluster (in the private subnets)
 * The PyWeatherAurora Lambda function, connected to the VPC/Subnets
 * The CustomResource created previously is used to load a DB schema
 * A secret rotation is setup to run every 30 days and rotate the password.

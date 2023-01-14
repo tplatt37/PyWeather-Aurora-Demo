@@ -72,31 +72,36 @@ Resources:
       # NOTE: username and password are coming from the secret created earlier in this stack.
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
-      Engine: aurora
-      # This is the ONLY MySQL version supported!
-      EngineVersion: 5.6.10a
-      # Serverless
-      EngineMode: serverless
+      Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.02.0
+
+      # NOTE: EngineMode serverless refers to V1 Serverless - Not V2!
+      #https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.create-cluster.html
+      #EngineMode: serverless
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 1
+        MaxCapacity: 4
+      
+      # Not supported in Aurora Serverless V2
       # So we can use Data API / Query Editor in the console, if we want (Great for demos!)
-      EnableHttpEndpoint: true
+      #EnableHttpEndpoint: true
+      
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !ImportValue 'pyweather-aurora-DBSecurityGroup'
-      ScalingConfiguration:
-        # NOTE, while MinCapacity is set to 1, we have AutoPause enabled.
-        # Effectively, the db will scale to ZERO after 1,000 seconds of inactivity.
-        # When it is in use, it won't go below 1 ACU (or over 4 ACU)
-        # After being paused, it will spin up again with about 20-30 seconds of delay
-        # (So set a generous timeout when you make a db connection)
-        AutoPause: true
-        MinCapacity: 1
-        MaxCapacity: 4
-        SecondsUntilAutoPause: 1000
-
+  
+  RDSDBInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      Engine: aurora-mysql
+      DBInstanceClass: db.serverless
+      DBClusterIdentifier: !Ref RDSCluster
+      
+      
   CustomResource:
     Type: AWS::CloudFormation::CustomResource
-    # Trigger a Lambda to create the db schema once the cluster is available.
-    DependsOn: RDSCluster
+    # Trigger a Lambda to create the db schema once the cluster AND INSTANCE is available.
+    DependsOn: RDSDBInstance
     Properties:
       # Note that we're passing the RDS details needed by the lambda (endpoint and secret arn)
       RDSEndpoint: !GetAtt RDSCluster.Endpoint.Address
