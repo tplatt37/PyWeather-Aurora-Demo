@@ -33,7 +33,8 @@ echo "Subnets=$SUBNETS_NOCOMMA"
 VPC_ID=$(aws ec2 describe-subnets --subnet-ids $SUBNETS_NOCOMMA --query 'Subnets[0].VpcId' --output text)
 echo "VpcId=$VPC_ID"
 
-sam build -t aurora.yaml
+# --use-container so we can use a Python version like 3.10 that might not be on local machine.
+sam build -t aurora.yaml --use-container
 sam package --s3-bucket $BUCKET --output-template-file package.yaml --region $REGION
 
 sam deploy --stack-name pyweather-aurora-cluster \
