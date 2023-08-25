@@ -8,7 +8,7 @@
 REGION=${AWS_DEFAULT_REGION:-$(aws configure get default.region)}
 
 # NOTE: if you invoke with --yes (must be after the cluster name) it will skip these "Are you sure?" prompts
-if [[ $2 != "--yes" ]]; then
+if [[ $1 != "--yes" ]]; then
     read -p "This will delete all the pyweather-aurora-* stacks in $REGION. Are you sure? (Yy) " -n 1 -r
     echo    # (optional) move to a new line
     if [[ ! $REPLY =~ ^[Yy]$ ]]
