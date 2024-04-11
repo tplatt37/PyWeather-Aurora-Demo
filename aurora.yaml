@@ -142,7 +142,7 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
-      Runtime: python3.10
+      Runtime: python3.11
       Timeout: 90
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
