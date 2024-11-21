@@ -76,14 +76,14 @@ Resources:
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
       Engine: aurora-mysql
       # 
-      EngineVersion: 8.0.mysql_aurora.3.06.0
+      EngineVersion: 8.0.mysql_aurora.3.08.0
       StorageEncrypted: True
 
       # NOTE: EngineMode serverless refers to V1 Serverless - Not V2!
       #https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.create-cluster.html
       #EngineMode: serverless
       ServerlessV2ScalingConfiguration:
-        MinCapacity: 1
+        MinCapacity: 0
         MaxCapacity: 4
       
       # Not supported in Aurora Serverless V2
