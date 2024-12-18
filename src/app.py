@@ -86,7 +86,7 @@ def lambda_handler(event, context):
     # Unexpected error: Could not connect to MySQL instance.
     #[ERROR]	2021-05-06T10:06:12.451Z	3bf6616c-1a25-4f55-8047-09cb748b4ddf	(1045, "Access denied for user 'admin'@'172.31.70.62' (using password: YES)")
     try:
-        conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=20)
+        conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=180)
     except pymysql.MySQLError as e:
         print("ERROR: Unexpected error: Could not connect to MySQL instance.")
         print(e)
@@ -95,7 +95,7 @@ def lambda_handler(event, context):
             print("Password may have been rotated, retrieving latest password...")
             secret_info = eval(get_db_secrets(os.environ["DB_SECRET_ARN"]))
             password = secret_info['password']
-            conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=20)
+            conn = pymysql.connect(host=rds_host, user=name, passwd=password, db=db_name, connect_timeout=180)
             # Update the global variable 
             DB_SECRETS = secret_info
         else:
