@@ -144,7 +144,7 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 180 # Generous timeout because the Aurora DB scales to Zero. Give it time to start up.
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
