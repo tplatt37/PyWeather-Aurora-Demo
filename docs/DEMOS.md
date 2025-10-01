@@ -1,3 +1,0 @@
-# Overview
-Here's some ideas about what you can demonstrate with this example.
-...
