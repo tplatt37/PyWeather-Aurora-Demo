@@ -84,9 +84,8 @@ Resources:
         MinCapacity: 0
         MaxCapacity: 4
       
-      # Not supported in Aurora Serverless V2
       # So we can use Data API / Query Editor in the console, if we want (Great for demos!)
-      #EnableHttpEndpoint: true
+      EnableHttpEndpoint: true
       
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
